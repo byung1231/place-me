@@ -17,7 +17,7 @@ import Autocomplete from 'react-google-autocomplete';
 //https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=-33.8670522,151.1957362&radius=1500&type=restaurant&keyword=cruise&key=AIzaSyBIri09wgE5LtGALmNIk1ubBbBTIhTe2O8
 
 
-const apiKey = "AIzaSyBIri09wgE5LtGALmNIk1ubBbBTIhTe2O8";
+const apiKey = "HIDDEN";
 const defaultZoom = 15;
 
 // if location not enabled, let user know oif t
