@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDom from 'react-dom';
 import logo from './logo.svg';
+import star from './star.png';
 import './App.css';
 import { usePosition } from 'use-position';
 //import { Map, Marker, GoogleApiWrapper } from 'google-maps-react';
@@ -19,8 +20,33 @@ import Autocomplete from 'react-google-autocomplete';
 
 const apiKey = "AIzaSyBIri09wgE5LtGALmNIk1ubBbBTIhTe2O8";
 const defaultZoom = 15;
-
+const radius=555;
 // if location not enabled, let user know oif t
+
+/*
+Types to allow:
+
+restaurant
+supermarket
+shopping_mall
+store
+parking
+park
+bar
+cafe
+clothing_store
+car_dealer
+spa
+tourist_attraction
+movie_theater
+night_club
+museum
+
+
+*/
+
+
+
 
 function App() {
 
@@ -32,15 +58,50 @@ function App() {
 
   // origin selected from autocomplete
 //  const [originAutoComplete, setOriginAutoComplete] = useState();
+
+  // note: the destination is now an object (object from JSON returned by google api), rather than just a place ID
+  // so for example, to get the place id, use "destination.place_id"
   const [destination, setDest] = useState();
+  const [destCount, setDestCount] = useState(); // -1 means not started yet
+
   const [url, setUrl] = useState()
   const [loading, setLoading] = useState();
 //  you can think of useEffect Hook as componentDidMount, componentDidUpdate, and componentWillUnmount combined
 
-
   const [ipAddr, setIPAddr] = useState();
 
+  var placeTypeSelected = "restaurant";
+  //var started = false; // determining whether the place has started or not (more for the "No places" msg)
 
+  const [started, setStarted] = useState();
+
+
+  const [placeType, setPlaceType] = useState();
+
+  const placeTypesList = {
+    "Restaurant" : "restaurant" ,
+    "Supermarket" : "supermarket" ,
+    "Shopping Mall" : "shopping_mall",
+    "Store" : "store",
+    "Parking" : "parking",
+    "Park" : "park",
+    "Bar" : "bar",
+    "Cafe" : "cafe",
+    "Clothing Store" : "clothing_store",
+    "Car Dealer" : "car_dealer",
+    "Spa" : "spa",
+    "Tourist Attraction" : "tourist_attraction",
+    "Movie Theater" : "movie_theater",
+    "Night Club" : "night_club",
+    "Museum" : "museum"
+
+  }
+// Format: {display name : actual type value}
+
+// since key-value pairs cannot be sorted, convert to array (only the display names)
+// and then, look up the actual type value when generating the dropdown boxes with placeTypes;
+// with  display names as the keys.
+  const placeTypesSorted = Object.keys(placeTypesList).sort()
 
 
 
@@ -81,39 +142,12 @@ function App() {
 
 },[origin.lat, origin.lng]);
 
-/*
-  useEffect(() => {
-
-    if(originAutoComplete !== undefined){
-      setUrl(`https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${originAutoComplete.placeID}&zoom=${defaultZoom}`);
-        console.log(`setUrlll: ${url}`)
-    }
-
-  //  setDestination('');
-
-
-  },[originAutoComplete]);
-*/
-
-
-
-
-
-  useEffect(() => {
-
-
-
-
-
-        console.log(`setUrlll 2 : ${url}`)
-
-
-
-  },[destination]);
-
 
 // get current location
 useEffect(() => {
+
+  setStarted(false);
+  setPlaceType("restaurant")
 
   // if location is allowed,
   if (navigator.geolocation) {
@@ -169,6 +203,17 @@ useEffect(() => {
 
 
   }
+
+/*
+  // test place json
+  console.log('fetching:');
+  fetch('./testplace.json')
+    .then((res) => res.json())
+    .then((data) => {
+      console.log('data:', data);
+      setDest(data)
+    })
+*/
 
 },[]);
 
@@ -271,32 +316,34 @@ const setDestination = () => {
 
 
 
+
+
     console.log("origin:::")
     console.log(origin.addr)
     console.log(origin.lat)
 
     var dest = '';
-    const proxyurl = "https://cors-anywhere.herokuapp.com/"
+    const proxyUrl = "https://cors-anywhere.herokuapp.com/"
+    const mapUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${origin.lat},${origin.lng}&radius=${radius}&opennow=true&type=${placeType}&key=${apiKey}`
 
-    fetch(proxyurl + `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${origin.lat},${origin.lng}&radius=500&opennow=true&type=restaurant&key=${apiKey}`)
+    fetch(proxyUrl + mapUrl)
       .then(res => res.json())
       .then(
           (result) => {
       //      setIsLoaded(true);
         //    setItems(result.items);
+        console.log("Dest Map URL:" + mapUrl)
         console.log("JSON Result - nearby places: ")
-          console.log(result)
+
           //placeID = result.results[0].place_id;
 
+        // note: origin.addr is not updated here yet (async)
 
-
-          // note: origin.addr is not updated here yet (async)
-
-
-          //setUrl(`https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${addr}&zoom=${defaultZoom}`);
-
+          // get total # of results
           const count = result.results.length
           console.log(`count: ${count}`)
+
+          setDestCount(count)
 
           var random = Math.floor(Math.random() * Math.floor(count+1));
 
@@ -305,20 +352,48 @@ const setDestination = () => {
           dest = result.results[random];
 
 
-            if(result.status == "ZERO_RESULTS"){
+            setStarted(true)
+
+            if(result.status === "ZERO_RESULTS"){
               console.log("No results")
+
+
             }
             else{
               if(dest !== undefined && dest.place_id !== ''){
                   setDest(dest)
-                  console.log(`Destination: ${dest}`)
+                  //console.log(`Destination: ${JSON.stringify(dest)}`)
                   setDestUrl(dest)
 
-                      //returnDestDetails(dest)
+                  console.log(dest)
+                  // save history to MongoDB through flask API
+                  fetch('/api/save', {
+                    method: 'POST',
+                    cache: "no-cache",
+                    headers:{
+                        "Content-Type": "application/json",
+                    },
+                    body:JSON.stringify({
+                      "time": Date().toLocaleString(),
+                      "originAddr": origin.addr,
+                      "originLat": origin.lat,
+                      "originLng": origin.lng,
+                      "placeID": dest.place_id,
+                      "placeName": dest.name,
+                      "placeType": dest.types[0]
+                      })
+                  })
+                  .then(res => res.json())
+                   .catch(console.error)
+
+
+
+
 
               }
 
             }
+
           },
           // Note: it's important to handle errors here
           // instead of a catch() block so that we don't swallow
@@ -343,14 +418,13 @@ const setDestination = () => {
 
 const setDestUrl = (destObject) => {
 
+  const dest = destObject.place_id;
+
+
   // precedence for origin  :
   // place ID -> address -> lat/lng
 
-
-
-  const dest = destObject.place_id;
-
-  if(origin !== undefined && origin.placeID !== undefined && origin.placeID != ''){
+  if(origin !== undefined && origin.placeID !== undefined && origin.placeID !== ''){
     setUrl(
         `https://www.google.com/maps/embed/v1/directions`
             + `?key=${apiKey}`
@@ -395,41 +469,103 @@ const setDestUrl = (destObject) => {
 
 }
 
+
+// generating the dropdown boxes for the place types
+const returnPlaceTypes = () => {
+
+console.log("returnPlaceTypes")
+console.log(placeTypesSorted)
+
+
+  if(placeTypesSorted){
+      return placeTypesSorted.map((item) => {
+
+        var selected = "";
+
+        //select "Restaurant" as the default one
+        if(item === "Restaurant"){
+            selected = "selected";
+
+        }
+          return(
+
+            <option value={placeTypesList[item]} selected={selected}>
+                {item}
+            </option>
+          )
+
+
+        })
+      }
+
+
+
+
+}
+
+
 const returnDestDetails = () =>{
 
-  if( destination === undefined){
+  console.log("returnDestDetails() " + started)
+
+  if( !started && destination === undefined){
     return null
   }
 
 
+  // need to display something if no opennow locations are available nearby
 
-  return(
+  // cases to test:
+  // once desstination is found,
+  // change the address where no destinatino could be found
+  // see if it behaves as expected
+
+  // "NO OPEN PLACES" -> this should not be displayed the first time. Or when the current place cahnges
+
+  else if( started && (destination === undefined || destCount === 0)){
+    return(
+        <div id="noPlacesNearby" >
+          No open places nearby :(
+        </div>
+    )
+
+  }
+  else{
 
 
-<div style={{marginLeft:'auto', marginRight:'auto', textAlign:'center'}}>
-    <div id="destTitle">Destination:</div>
-    <div id="destDetails">
-        {destination.name} <br />
+      var starr = "star";
+      var rating="";
 
-        <a href={`https://www.google.com/maps/place/?q=place_id:${destination.place_id}`} target="_blank">View Details</a>
+      if(destination.rating !== undefined && destination.rating !== 0){
+           rating = ( <div>( {destination.rating}
+
+              &nbsp;<img src={star} id="star" />  ) </div>
+
+
+          )
+      }
 
 
 
-    </div>
-  </div>
-  )
+      return(
+
+
+        <div>
+            <div id="destTitle">Your destination:</div>
+            <div id="destDetails">
+                {destination.name} {rating}
+            </div>
+            <div id="destLinkContainer">
+                <a href={`https://www.google.com/maps/place/?q=place_id:${destination.place_id}`} target="_blank" id="destLink">View Details</a>
+            </div>
+          </div>
+      )
+
+  }
+
+
 }
 
-
-
-
-const getIPAddr = () =>{
-
-
-
-
-
-}
 
 /*
   const watch = true;
@@ -449,11 +585,16 @@ const getIPAddr = () =>{
   return (
     <div className="App">
       <header className="App-header">
-        <p>
-          Place Me
+        <p id="title">
+          Place Me!
           </p>
-          </header>
-          <div id="warning">Please allow location</div>
+          <div id="subtitle">
+            Pick a random place around you!
+          </div>
+          <hr id="line" />
+        </header>
+          <div className="message">1. Please allow location services, <b><u>or</u></b> enter your current address below:</div>
+
           <div>
           {
   //        latitude: {latitude}<br/>
@@ -462,45 +603,66 @@ const getIPAddr = () =>{
   //    error: {error}
 }
       </div>
-      origin: {origin.lat}, {origin.lng} <br />
-      <br />
+    {
+//       origin: {origin.lat}, {origin.lng} <br />
+    }
 
-      <div id="dest">
+    <div id="">
+
+        <Autocomplete id="autocomplete"
+
+      onPlaceSelected={(place) => {
+        setStarted(false);
+
+        setOrigin({placeID: place.place_id, lat:place.geometry.location.lat(), lng: place.geometry.location.lng()});
+        console.log(place);
+        console.log("geometry: " + place.geometry.location.lat() + ", " + place.geometry.location.lng());
+        console.log("place ID: " + place.place_id);
+      }}
+  types={['address']}
+placeholder="Enter your current location"
+  />
+{
+// PROBLEM: dropdown option gone when changing origin from autocomplete
+
+
+  //types={['(regions)']} -> list of types defined by google maps api:
+  // refer to https://developers.google.com/places/web-service/supported_types for full list
+//componentRestrictions={{country: "ru"}}
+}
+  </div>
+  <div className="message">2. Pick a category:</div>
+  <div id="dropdownDiv">
+    <form action = "" >
+  {
+    //   <select id="dropdown" onChange={(e) => placeTypeSelected = e.target.value}>
+  }
+     <select id="dropdown" onChange={(e) => setPlaceType(e.target.value)}>
+        {returnPlaceTypes()}
+      </select>
+      </form>
+  </div>
+    <div>
+      <button type="button" onClick={setDestination} id="button">GO!!</button>
+    </div>
+
+<div id="destContainer">
 
         {returnDestDetails()}
+</div>
 
-      </div>
-        <div>
-          <button type="button" onClick={setDestination}>GOO</button>
-        </div>
-        <div>
 
-            <Autocomplete
-          style={{width: '30%'}}
-          onPlaceSelected={(place) => {
-            setOrigin({placeID: place.place_id, lat:place.geometry.location.lat(), lng: place.geometry.location.lng()});
-            console.log(place);
-            console.log("geometry: " + place.geometry.location.lat() + ", " + place.geometry.location.lng());
-            console.log("place ID: " + place.place_id);
-          }}
-      types={['address']}
-
-      />
-{
-      //types={['(regions)']} -> list of types defined by google maps api:
-      // refer to https://developers.google.com/places/web-service/supported_types for full list
-    //componentRestrictions={{country: "ru"}}
-}
-      </div>
-      <div style={{marginLeft:'auto', marginRight:'auto', backgroundColor:'blue'}}  >
+      <div style={{marginLeft:'auto', marginRight:'auto'}}  >
       {
       //  <MapContainer position={position} />
 
       //  <Directions />
       }
+
+
       <iframe
-      frameborder="0" style={{border:0, width:"55vw", height:"25vw"}}
-      src={url}  allowFullScreen>
+      frameBorder="0"
+      src={url}  allowFullScreen id="map">
       </iframe>
 
     {/* for directions:
